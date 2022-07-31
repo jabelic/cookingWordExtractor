@@ -100,6 +100,11 @@ const useWordToExplore = () => {
     }
     inputVal.value = "";
   };
+  const removeWordToExplore = (arg) => {
+    wordToExplore.value.forEach((item, index) => {
+      if (item === arg) wordToExplore.value.splice(index, 1);
+    });
+  };
 
   const get_words = (sentence): string[] => {
     /** 分かち書きされた言葉リスト */
@@ -109,7 +114,13 @@ const useWordToExplore = () => {
       return wordToExplore.value.some((wants) => it.includes(wants));
     });
   };
-  return { wordToExplore, addToWordToExplore, get_words, inputVal };
+  return {
+    wordToExplore,
+    addToWordToExplore,
+    get_words,
+    inputVal,
+    removeWordToExplore,
+  };
 };
 
 const {
@@ -123,19 +134,26 @@ const {
   setContents,
 } = useNHK();
 
-const { wordToExplore, addToWordToExplore, get_words, inputVal } =
-  useWordToExplore();
+const {
+  wordToExplore,
+  addToWordToExplore,
+  get_words,
+  inputVal,
+  removeWordToExplore,
+} = useWordToExplore();
 
 /**興味関心ワードに一致する番組の配列 */
 const interestedProgs = ref([]);
 const getMatchProgsWithWords = () => {
+  /** 配列初期化 */
+  interestedProgs.value.length = 0;
   /** 興味関心ワードに一致する番組を抽出 */
   contents.value.forEach(async (item) => {
     if (item.content.length) {
       const detected = get_words(item.content);
       if (detected.length) {
         console.debug(item.title, detected);
-        if (interestedProgs.value.some((it) => it.title == item.title)) return;
+        // if (interestedProgs.value.some((it) => it.title == item.title)) return;
         interestedProgs.value.push({
           title: item.title,
           detectedWords: detected,
@@ -155,10 +173,15 @@ const setProgs = (async () => {
   /** 興味関心ワードに一致する番組を抽出 */
   getMatchProgsWithWords();
 })();
-const currentWord = ref();
+
 const updateOnClick = async () => {
-  console.debug(currentWord.value);
+  if (inputVal.value.length == 0) return;
   await addToWordToExplore();
+  getMatchProgsWithWords();
+};
+
+const removeWordOnClick = (arg) => {
+  removeWordToExplore(arg);
   getMatchProgsWithWords();
 };
 
@@ -167,7 +190,7 @@ onMounted(async () => {});
 
 <template>
   <h2>{{ msg }}</h2>
-
+  <h4>番組一覧</h4>
   <div class="card">
     <div v-for="item of interestedProgs" :key="item.id" class="card-skin">
       <div class="card__textbox">
@@ -188,7 +211,7 @@ onMounted(async () => {});
   </div>
 
   <div class="group">
-    <label for="text2">フードリストに追加します</label>
+    <label for="text2">食材ワードリストに追加します</label>
     <div class="search_bar">
       <div class="search_bar_content">
         <i class="fas fa-search search_icon"></i>
@@ -211,7 +234,15 @@ onMounted(async () => {});
       <summary>フードリスト</summary>
       <ul>
         <li v-for="item of wordToExplore" :key="item" class="list">
-          {{ item }}
+          <div>
+            {{ item }}
+          </div>
+          <input
+            class="delete_button"
+            type="button"
+            @click="removeWordOnClick(item)"
+            value="削除"
+          />
         </li>
       </ul>
     </details>
@@ -219,6 +250,11 @@ onMounted(async () => {});
 </template>
 
 <style scoped>
+h2,
+h4 {
+  align: center;
+}
+
 .read-the-docs {
   color: #888;
 }
@@ -229,6 +265,7 @@ onMounted(async () => {});
 }
 .word_list_details {
   width: 50vw;
+  color: rgba(40, 40, 50, 100%);
 }
 summary {
   position: relative;
@@ -306,7 +343,8 @@ ol {
 
 ul li,
 ol li {
-  color: #2d8fdd;
+  color: rgba(50, 50, 50, 100%);
+  font-weight: bold;
   border-left: solid 6px #2d8fdd; /*左側の線*/
   background: #f1f8ff; /*背景色*/
   margin-bottom: 3px; /*下のバーとの余白*/
@@ -315,6 +353,16 @@ ol li {
   margin: 0.1em;
   list-style-type: none !important; /*ポチ消す*/
 }
+li {
+  display: flex;
+}
+li >>> div {
+  padding-left: 10%;
+}
+.delete_button {
+  margin-left: auto;
+  background-color: red;
+}
 
 /** ===== input ===== */
 
@@ -322,7 +370,7 @@ ol li {
   margin: 1%;
 }
 .group >>> label {
-  color: rgba(100, 100, 100, 60%);
+  color: rgba(200, 200, 100, 70%);
 }
 .search_bar {
   display: flex; /*アイコン、テキストボックスを調整する*/
@@ -351,21 +399,26 @@ ol li {
   font-size: 16px;
   width: 95%; /*flexの中で100%広げる*/
   height: 100%;
-  background-color: #ddd;
+  background-color: rgba(50, 50, 50, 60%);
   border: none; /*枠線非表示*/
   outline: none; /*フォーカス時の枠線非表示*/
   box-sizing: border-box; /*横幅の解釈をpadding, borderまでとする*/
+}
+#text2::placeholder {
+  color: #ddd;
 }
 
 .add_words {
   display: flex;
   justify-content: center;
   margin: 2%;
-  margin-bottom: 3%;
+  margin-bottom: 5%;
 }
 .add_words >>> input[type="button"] {
   width: 50vw;
   height: 5vh;
+  font-weight: bold;
+  font-size: 1em;
 }
 
 /** カード */
@@ -386,7 +439,7 @@ ol li {
 } */
 .card__textbox {
   width: 100%;
-  height: auto;
+  height: 100%;
   padding: 20px 18px;
   background: #ffffff;
   box-sizing: border-box;
@@ -407,7 +460,9 @@ ol li {
   flex-flow: wrap;
   width: 35vw;
   overflow: hidden;
-  margin: 1%;
+  margin-bottom: 1%;
+  margin-left: 1%;
+  margin-right: 1%;
   border-radius: 8px;
   border-left: solid 1px #ddd;
   border-right: solid 1px #ddd;
