@@ -5,6 +5,54 @@ import TinySegmenter from "tiny-segmenter";
 defineProps({
   msg: String,
 });
+const isLoading = ref(false);
+/** あいまい検索
+ * 参考: https://qiita.com/H40831/items/5b44ef00cebf532087db
+ */
+const useAimaiSearch = () => {
+  function katakanaToHiragana(src) {
+    return src.replace(/[\u30a1-\u30f6]/g, function (match) {
+      const chr = match.charCodeAt(0) - 0x60;
+      return String.fromCharCode(chr);
+    });
+  }
+
+  function hiraganaToKatagana(src) {
+    return src.replace(/[\u3041-\u3096]/g, function (match) {
+      const chr = match.charCodeAt(0) + 0x60;
+      return String.fromCharCode(chr);
+    });
+  }
+
+  function escapeRegExp(string) {
+    return string.replace(/[.*+\-?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function generateFuzzyRegExp(searchWord) {
+    searchWord = escapeRegExp(searchWord);
+    const chars = searchWord.split("").map((char) => {
+      const hiragana = this.katakanaToHiragana(char);
+      const katakana = this.hiraganaToKatagana(char);
+      if (hiragana === katakana) return char;
+      return `(${hiragana}|${katakana})`;
+    });
+    const fuzzyRegExp = new RegExp(`(${chars.join("")})`, "ig");
+    return fuzzyRegExp;
+  }
+  return {
+    katakanaToHiragana,
+    hiraganaToKatagana,
+    escapeRegExp,
+    generateFuzzyRegExp,
+  };
+};
+
+const {
+  katakanaToHiragana,
+  hiraganaToKatagana,
+  escapeRegExp,
+  generateFuzzyRegExp,
+} = useAimaiSearch();
 
 /** NHK */
 const useNHK = () => {
@@ -57,7 +105,10 @@ const useNHK = () => {
 
 /** validation */
 const isWordFood = async (word) => {
+  isLoading.value = true;
   try {
+    const word1 = hiraganaToKatagana(word); // カタカナに変換
+    const word2 = katakanaToHiragana(word); // 平仮名に変換
     const tmp = await fetch(
       `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word}`,
       {
@@ -68,13 +119,46 @@ const isWordFood = async (word) => {
       .then((data) => {
         return data.json();
       });
-    return tmp;
-  } catch (e) {}
+    console.debug(tmp);
+    if (Object.keys(tmp).length > 0) return { result: tmp, word: word };
+    else {
+      const tmp = await fetch(
+        `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word1}`,
+        {
+          method: "GET",
+        }
+      )
+        .then((res) => res)
+        .then((data) => {
+          return data.json();
+        });
+      if (Object.keys(tmp).length > 0) return { result: tmp, word: word1 };
+      else {
+        const tmp = await fetch(
+          `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word1}`,
+          {
+            method: "GET",
+          }
+        )
+          .then((res) => res)
+          .then((data) => {
+            return data.json();
+          });
+        if (Object.keys(tmp).length > 0) return { result: tmp, word: word2 };
+        else throw new Error("");
+      }
+    }
+  } catch (e) {
+    alert(`${word}は食材と認識されませんでした。他のワードをお試しください。`);
+    inputVal.value = "";
+  } finally {
+    isLoading.value = false;
+  }
 };
 
 /** 構文解析器 */
 const tinySegmenter = new TinySegmenter();
-/** 番組の内容から興味関心ワード */
+/** 番組の内容から興味関心ワードを検索する */
 const useWordToExplore = () => {
   const wordToExplore = ref([
     "うに",
@@ -87,10 +171,11 @@ const useWordToExplore = () => {
   ]);
   const inputVal = ref();
   const addToWordToExplore = async () => {
+    /** すでにリストにあるかないかを確認 */
     if (!wordToExplore.value.includes(inputVal.value)) {
-      const tmp = await isWordFood(inputVal.value);
-      console.debug(tmp, inputVal.value);
-      if (tmp[0]) wordToExplore.value.push(inputVal.value);
+      const { result, word } = await isWordFood(inputVal.value);
+      //   console.debug(result, inputVal.value);
+      if (result[0]) wordToExplore.value.push(word);
       else
         alert(
           `${inputVal.value}は食材と認識されませんでした。他のワードをお試しください。`
@@ -111,7 +196,9 @@ const useWordToExplore = () => {
     const segments = tinySegmenter.segment(sentence);
     /** 興味関心ワードを含む単語を取り出す(配列) */
     return segments.filter((it) => {
-      return wordToExplore.value.some((wants) => it.includes(wants));
+      return wordToExplore.value.some((wants) =>
+        katakanaToHiragana(it).includes(katakanaToHiragana(wants))
+      );
     });
   };
   return {
@@ -121,6 +208,12 @@ const useWordToExplore = () => {
     inputVal,
     removeWordToExplore,
   };
+};
+
+const useSearchForGoogle = () => {
+  const googleSearchUrl = "https://www.google.com/search?q=";
+  const getGoogleSearchUrl = (arg: string) => googleSearchUrl + arg;
+  return { googleSearchUrl, getGoogleSearchUrl };
 };
 
 const {
@@ -144,10 +237,10 @@ const {
 
 /**興味関心ワードに一致する番組の配列 */
 const interestedProgs = ref([]);
+/** 興味関心ワードに一致する番組を抽出 */
 const getMatchProgsWithWords = () => {
   /** 配列初期化 */
   interestedProgs.value.length = 0;
-  /** 興味関心ワードに一致する番組を抽出 */
   contents.value.forEach(async (item) => {
     if (item.content.length) {
       const detected = get_words(item.content);
@@ -162,9 +255,8 @@ const getMatchProgsWithWords = () => {
     }
   });
 };
+const { googleSearchUrl, getGoogleSearchUrl } = useSearchForGoogle();
 
-const googleSearchUrl = "https://www.google.com/search?q=";
-const getGoogleSearchUrl = (arg: string) => googleSearchUrl + arg;
 const setProgs = (async () => {
   /** NHKの今日の番組一覧 */
   programs.value = await getNhkPrograms();
@@ -189,6 +281,12 @@ onMounted(async () => {});
 </script>
 
 <template>
+  <div>
+    <div class="progress_back">
+      <div v-if="isLoading" class="progress_front_unknown"></div>
+    </div>
+  </div>
+
   <h2>{{ msg }}</h2>
   <h4>番組一覧</h4>
   <div class="card">
@@ -250,6 +348,49 @@ onMounted(async () => {});
 </template>
 
 <style scoped>
+/** ローディングバー */
+.progress_front_unknown {
+  display: block;
+  width: 100%;
+  height: 7px;
+  background: #ccc;
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 10px;
+  transition: 0.5s ease-in-out;
+  overflow: hidden;
+}
+.progress_front_unknown::before {
+  position: absolute;
+  content: "";
+  display: inline-block;
+  top: 0px;
+  left: -48%;
+  width: 50%;
+  height: 7px;
+  background-color: #e31787;
+  animation: bar-unknown 3s ease-out infinite;
+  border-radius: 50px;
+}
+@keyframes bar-unknown {
+  0% {
+    transform: translateX(0%);
+  }
+  45% {
+    transform: translateX(294%);
+  }
+  50% {
+    transform: translateX(294%);
+  }
+  98% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
 h2,
 h4 {
   align: center;
