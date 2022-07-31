@@ -105,25 +105,26 @@ const useNHK = () => {
 
 /** validation */
 const isWordFood = async (word) => {
-  const getFoodInfo = async (word) => {
-    return await fetch(
-      `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word1}`,
+  const getFoodInfo = async (_word) => {
+    const tmp = await fetch(
+      `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${_word}`,
       {
         method: "GET",
       }
     );
+    return tmp;
   };
   isLoading.value = true;
   try {
     const word1 = hiraganaToKatagana(word); // カタカナに変換
     const word2 = katakanaToHiragana(word); // 平仮名に変換
-    const tmp = getFoodInfo(word);
+    const tmp = await getFoodInfo(word);
     if (Object.keys(tmp).length > 0) return { result: tmp, word: word };
     else {
-      const tmp = getFoodInfo(word1);
+      const tmp = await getFoodInfo(word1);
       if (Object.keys(tmp).length > 0) return { result: tmp, word: word1 };
       else {
-        const tmp = getFoodInfo(word2);
+        const tmp = await getFoodInfo(word2);
         if (Object.keys(tmp).length > 0) return { result: tmp, word: word2 };
         else throw new Error("");
       }
@@ -154,8 +155,7 @@ const useWordToExplore = () => {
     /** すでにリストにあるかないかを確認 */
     if (!wordToExplore.value.includes(inputVal.value)) {
       const { result, word } = await isWordFood(inputVal.value);
-      //   console.debug(result, inputVal.value);
-      if (result[0]) wordToExplore.value.push(word);
+      if (Object.keys(result).length) wordToExplore.value.push(word);
       else
         alert(
           `${inputVal.value}は食材と認識されませんでした。他のワードをお試しください。`
