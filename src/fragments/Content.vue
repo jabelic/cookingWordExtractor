@@ -117,43 +117,12 @@ const isWordFood = async (word) => {
   try {
     const word1 = hiraganaToKatagana(word); // カタカナに変換
     const word2 = katakanaToHiragana(word); // 平仮名に変換
-    // const tmp = await fetch(
-    //   `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word}`,
-    //   {
-    //     method: "GET",
-    //   }
-    // )
-    //   .then((res) => res)
-    //   .then((data) => {
-    //     return data.json();
-    //   });
     const tmp = getFoodInfo(word);
-    console.debug(tmp);
     if (Object.keys(tmp).length > 0) return { result: tmp, word: word };
     else {
-      //   const tmp = await fetch(
-      //     `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word1}`,
-      //     {
-      //       method: "GET",
-      //     }
-      //   )
-      //     .then((res) => res)
-      //     .then((data) => {
-      //       return data.json();
-      //     });
       const tmp = getFoodInfo(word1);
       if (Object.keys(tmp).length > 0) return { result: tmp, word: word1 };
       else {
-        // const tmp = await fetch(
-        //   `https://script.google.com/macros/s/AKfycbzO6IMoPPbtBLb_AnRwgB1OheJyF5XwgNyj28NZdyjg76q4AzX0/exec/exec?name=${word1}`,
-        //   {
-        //     method: "GET",
-        //   }
-        // )
-        //   .then((res) => res)
-        //   .then((data) => {
-        //     return data.json();
-        //   });
         const tmp = getFoodInfo(word2);
         if (Object.keys(tmp).length > 0) return { result: tmp, word: word2 };
         else throw new Error("");
